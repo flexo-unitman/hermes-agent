@@ -259,7 +259,15 @@ class SSHEnvironment(BaseEnvironment):
         ssh_cmd.append(f"tar cf - -C / {shlex.quote(rel_base)}")
         with open(dest, "wb") as f:
             result = subprocess.run(ssh_cmd, stdout=f, stderr=subprocess.PIPE, timeout=120)
-        if result.returncode != 0:
+        if result.returncode == 1:
+            # GNU tar exit 1 means "some files changed while being read" —
+            # expected with live SQLite DBs under .hermes/; the archive is
+            # still complete enough for the content-hash diff in sync_back.
+            logger.debug(
+                "SSH bulk download: tar warnings (rc=1): %s",
+                result.stderr.decode(errors="replace").strip(),
+            )
+        elif result.returncode != 0:
             raise RuntimeError(f"SSH bulk download failed: {result.stderr.decode(errors='replace').strip()}")
 
     def _ssh_delete(self, remote_paths: list[str]) -> None:
