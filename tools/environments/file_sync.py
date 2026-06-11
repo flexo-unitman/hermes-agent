@@ -324,7 +324,19 @@ class FileSyncManager:
 
             with tempfile.TemporaryDirectory(prefix="hermes-sync-back-") as staging:
                 with tarfile.open(tf.name) as tar:
-                    tar.extractall(staging, filter="data")
+                    skipped = 0
+                    for member in tar:
+                        try:
+                            tar.extract(member, staging, filter="data")
+                        except tarfile.FilterError as exc:
+                            # E.g. symlinks to absolute paths (the Mnemosyne
+                            # plugin registration symlink points into the
+                            # image venv). sync_back only applies regular
+                            # files, so these members are never needed.
+                            skipped += 1
+                            logger.debug("sync_back: skipping member %s (%s)", member.name, exc)
+                    if skipped:
+                        logger.debug("sync_back: skipped %d non-extractable member(s)", skipped)
 
                 applied = 0
                 for dirpath, _dirnames, filenames in os.walk(staging):
